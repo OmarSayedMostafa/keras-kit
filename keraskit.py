@@ -4,11 +4,12 @@ warnings.filterwarnings('ignore')
 import os
 
 # IF CPU DESIRED
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # USE CPU memory
-os.environ["CUDA_VISIBLE_DEVICES"]="" # No GPUS
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # USE CPU memory
+# os.environ["CUDA_VISIBLE_DEVICES"]="" # No GPUS
 
 # IF GPU DESIRED 
 # os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2,3" #GPUS ID
+
 import numpy as np
 import glob
 import cv2
