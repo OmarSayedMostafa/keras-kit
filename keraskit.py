@@ -17,7 +17,7 @@ import time
 import pandas as pd 
 import matplotlib.pyplot as plt
 
-from keras.models import load_model,Sequential
+from keras.models import load_model,Sequential, Model
 from keras.preprocessing.image import ImageDataGenerator
 
 from keras import backend as K
@@ -221,27 +221,69 @@ def extract_singleModel_from_multiGpusModel(multiGpuModel_path, verbose=False):
 def get_ClassActivationMapModel(model):
 
     # get softmax (final layer [predictions])  weights
-    softmax_weights = model.layers[-1].get_weights()[0] # 0 index for weights , 1 index for baises
-    # extract final conv output, and prediction output
+    softmax_weights = model.layers[-1].get_weights() # 0 index for weights , 1 index for baises
+    # extract final conv layer output, and prediction output of the last layer
     CAM_model = Model(inputs=model.input, outputs=(model.layers[-4].output, model.layers[-1].output)) 
     
     return CAM_model, softmax_weights
 
 
 
+def plot_ResNet_CAM(img, cam, classes, true_label):
+    
+    fig = plt.figure(figsize=(24, 24))
+    ax1 = fig.add_subplot(2,2,1)
+    
+    ax1.imshow(img)
+    ax1.imshow(cam, cmap='jet', alpha=0.65)
 
-def predict_CAM(img_as_tensor, cam_model, weights):
+    ax2 = fig.add_subplot(2,2,2)
+    ax2.imshow(img)
+    
+    ax1.set_title("Predicted Label = "+classes[pred]) 
+    ax2.set_title("True Label = "+true_label)    
+
+
+
+
+def predict_ResNet_CAM(img_as_tensor, model, softmax_weights):
+
+        
+    batch, img_height, img_width, img_channels = img_as_tensor.shape
+    
     # get filtered images from convolutional output + model prediction vector
-    last_conv_output, pred_vec = cam_model.predict(img)
+    last_conv_output, pred_vec = model.predict(img_as_tensor)
+    
+    
     # change dimensions of last convolutional outpu to 7 x 7 x 512 from 1x7x7x512
     last_conv_output = np.squeeze(last_conv_output) 
-    # get model's prediction (number between 0 and 999, inclusive)
-    pred = np.argmax(pred_vec)
+    
+    # get filters dimensions
+    filters_height, filters_width, filters_count = last_conv_output.shape
+    
+    
     # bilinear upsampling to resize each filtered image to size of original image 
-    mat_for_mult = scipy.ndimage.zoom(last_conv_output, (32, 32, 1), order=1) # dim: height x width x channels
-    # get AMP layer weights
-    weights = weights[:, pred] # dim: (512,) 
+    filters_upsampled_to_img_size = scipy.ndimage.zoom(last_conv_output, (int(img_height/filters_height), int(img_width/filters_width), 1), order=1) # dim: height x width x channels
+    
+    
+    # get model's prediction (number between 0 and 999, inclusive)
+    prediction = np.argmax(pred_vec)
+    
+        
+    # get the weights of the predicted class in  (final_layer).
+    weights = softmax_weights[0]
+    predicted_class_weights = weights[:, prediction] # dim: (filters_channels, number_of_classes) 
+    
+    bais = softmax_weights[1] 
+    
+    
     # get class activation map for object class that is predicted to be in the image
-    final_output = np.dot(mat_for_mult.reshape((224*224, 512)), weights).reshape(224,224) # dim: 224 x 224
+    cam_Heat_Map = np.dot(filters_upsampled_to_img_size.reshape((img_height*img_width, filters_count)), predicted_class_weights)
+    cam_Heat_Map = cam_Heat_Map.reshape(img_height,img_width) # dim: 224 x 224
+    
+        
     # return class activation map
-    return final_output, pred
+    return cam_Heat_Map, prediction
+
+
+
